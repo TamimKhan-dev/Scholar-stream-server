@@ -61,6 +61,19 @@ async function run() {
       const userCollection = db.collection('users');
 
 
+      // user related API's
+      app.post('/users', async (req, res) => {
+        const user = req.body;
+        user.role = 'student';
+        const email = user.email;
+        const userExists = await userCollection.findOne({ email });
+        if (userExists) {
+          res.status(409).json({message: 'user already exists'});
+          return; 
+        }
+        const result = await userCollection.insertOne(user);
+        res.status(201).json(result);
+      })
 
     // Send a ping to confirm a successful connection
     await client.db('admin').command({ ping: 1 })
@@ -74,7 +87,7 @@ async function run() {
 run().catch(console.dir)
 
 app.get('/', (req, res) => {
-  res.send('Hello from Server..')
+  res.send('Scholar Stream server is running')
 })
 
 app.listen(port, () => {
