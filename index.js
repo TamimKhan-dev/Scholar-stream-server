@@ -2,7 +2,7 @@ require('dotenv').config()
 const { format } = require('date-fns');
 const express = require('express')
 const cors = require('cors')
-const { MongoClient, ServerApiVersion } = require('mongodb')
+const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb')
 const admin = require('firebase-admin');
 const port = process.env.PORT || 3000;
 const decoded = Buffer.from(process.env.FB_SERVICE_KEY, 'base64').toString(
@@ -89,6 +89,14 @@ async function run() {
       app.get('/scholarships', async (req, res) => {
         const query = {};
         const result = await scholarshipsCollection.find(query).toArray();
+        res.status(200).json(result);
+      })
+
+      app.patch('/scholarships/:id', async (req, res) => {
+        const id = req.params.id;
+        const query = { _id: new ObjectId(id) };
+        const scholarshipInfo = { $set: req.body };
+        const result = await scholarshipsCollection.updateOne(query, scholarshipInfo);
         res.status(200).json(result);
       })
 
