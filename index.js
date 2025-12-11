@@ -66,13 +66,13 @@ async function run() {
       // user related API's
       app.post('/users', async (req, res) => {
         const user = req.body;
-        user.role = 'student';
         const email = user.email;
         const userExists = await usersCollection.findOne({ email });
         if (userExists) {
           res.status(409).json({message: 'user already exists'});
           return; 
         }
+        user.role = 'student';
         const result = await usersCollection.insertOne(user);
         res.status(201).json(result);
       })
@@ -86,11 +86,17 @@ async function run() {
       app.patch('/users/:id', async (req, res) => {
         const id = req.params.id;
         const updatedRole = { $set: req.body}
-        const query = { _id : new ObjectId(id) };
+        const query = { _id: new ObjectId(id) };
         const result = await usersCollection.updateOne(query, updatedRole);
         res.status(201).json(result);
       })
 
+      app.delete('/users/:id', async (req, res) => {
+        const id = req.params.id;
+        const query = { _id: new ObjectId(id) };
+        const result = await usersCollection.deleteOne(query);
+        res.status(200).json(result);
+      })
 
       // Scholarship related API's
       app.post('/scholarships', async (req, res) => {
