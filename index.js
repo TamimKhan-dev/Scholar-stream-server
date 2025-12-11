@@ -77,6 +77,12 @@ async function run() {
         res.status(201).json(result);
       })
 
+      app.get('/users', async (req, res) => {
+        const query = {};
+        const result = await usersCollection.find(query).toArray();
+        res.status(200).json(result);
+      })
+
 
       // Scholarship related API's
       app.post('/scholarships', async (req, res) => {
@@ -95,7 +101,11 @@ async function run() {
       app.patch('/scholarships/:id', async (req, res) => {
         const id = req.params.id;
         const query = { _id: new ObjectId(id) };
-        const scholarshipInfo = { $set: req.body };
+        const scholarshipInfo = { $set: {
+          ...req.body,
+          postDate: format(new Date(), 'dd/MM/yyyy')
+        } };
+
         const result = await scholarshipsCollection.updateOne(query, scholarshipInfo);
         res.status(200).json(result);
       })
