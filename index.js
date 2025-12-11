@@ -86,6 +86,12 @@ async function run() {
           res.status(201).json(result);
       })
       
+      app.get('/scholarships', async (req, res) => {
+        const query = {};
+        const result = await scholarshipsCollection.find(query).toArray();
+        res.status(200).json(result);
+      })
+
     // Send a ping to confirm a successful connection
     await client.db('admin').command({ ping: 1 })
     console.log(
