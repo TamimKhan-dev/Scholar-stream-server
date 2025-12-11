@@ -83,6 +83,14 @@ async function run() {
         res.status(200).json(result);
       })
 
+      app.patch('/users/:id', async (req, res) => {
+        const id = req.params.id;
+        const updatedRole = { $set: req.body}
+        const query = { _id : new ObjectId(id) };
+        const result = await usersCollection.updateOne(query, updatedRole);
+        res.status(201).json(result);
+      })
+
 
       // Scholarship related API's
       app.post('/scholarships', async (req, res) => {
