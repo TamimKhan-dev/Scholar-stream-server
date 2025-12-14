@@ -112,6 +112,13 @@ async function run() {
         res.status(200).json(result);
       })
 
+      app.get('/scholarships/:id', async (req, res) => {
+        const id = req.params.id;
+        const query = { _id: new ObjectId(id) };
+        const result = await scholarshipsCollection.findOne(query);
+        res.status(200).json(result);
+      })
+
       app.patch('/scholarships/:id', async (req, res) => {
         const id = req.params.id;
         const query = { _id: new ObjectId(id) };
