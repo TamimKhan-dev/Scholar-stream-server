@@ -1,5 +1,5 @@
 require("dotenv").config();
-const { format } = require("date-fns");
+const { format, parse, isAfter } = require("date-fns");
 const express = require("express");
 const cors = require("cors");
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
@@ -28,6 +28,53 @@ app.use(
     optionSuccessStatus: 200,
   })
 );
+
+// Mongodb Collections
+let db
+let applicationsCollection;
+let scholarshipsCollection;
+let usersCollection;
+
+// Stripe webhook
+app.post(
+  "/stripe-webhook",
+  express.raw({ type: "application/json" }),
+  async (req, res) => {
+    const sig = req.headers["stripe-signature"];
+
+    let event;
+    try {
+      event = stripe.webhooks.constructEvent(
+        req.body,
+        sig,
+        process.env.STRIPE_WEBHOOK_SECRET
+      );
+    } catch (err) {
+      console.log("Webhook signature verification failed.", err.message);
+      return res.status(400).send(`Webhook Error: ${err.message}`);
+    }
+
+    if (event.type === "checkout.session.completed") {
+      const session = event.data.object;
+      const applicationId = session.metadata.applicationId;
+
+      await applicationsCollection.updateOne(
+        { _id: new ObjectId(applicationId) },
+        {
+          $set: {
+            paymentStatus: "paid",
+            applicationDate: new Date(),
+          },
+        }
+      );
+
+      console.log(`Payment completed for application ${applicationId}`);
+    }
+
+    res.json({ received: true });
+  }
+);
+
 app.use(express.json());
 
 // jwt middlewares
@@ -57,9 +104,15 @@ const client = new MongoClient(process.env.MONGODB_URI, {
 
 async function run() {
   try {
-    const db = client.db("scholar_stream_db");
-    const usersCollection = db.collection("users");
-    const scholarshipsCollection = db.collection("scholarships");
+    db = client.db("scholar_stream_db");
+    usersCollection = db.collection("users");
+    scholarshipsCollection = db.collection("scholarships");
+    applicationsCollection = db.collection("applications");
+
+    await applicationsCollection.createIndex(
+      { userId: 1, scholarshipId: 1 },
+      { unique: true }
+    );
 
     // user related API's
     app.post("/users", async (req, res) => {
@@ -81,12 +134,12 @@ async function run() {
       res.status(200).json(result);
     });
 
-    app.get('/users/:email', async (req, res) => {
+    app.get("/users/:email", async (req, res) => {
       const email = req.params.email;
       const query = { email };
       const result = await usersCollection.findOne(query);
       res.status(200).json(result);
-    })
+    });
 
     app.patch("/users/:id", async (req, res) => {
       const id = req.params.id;
@@ -142,36 +195,97 @@ async function run() {
     });
 
     // Payment related API's
-    app.post('/create-checkout-session', async (req, res) => {
-      const paymentInfo = req.body;
-      const scholarship = await scholarshipsCollection.findOne({ _id: new ObjectId(paymentInfo.scholarshipId) })
+    app.post("/create-checkout-session", async (req, res) => {
+      const { applicationId } = req.body;
+
+      const application = await applicationsCollection.findOne({
+        _id: new ObjectId(applicationId),
+      });
+
+      const scholarship = await scholarshipsCollection.findOne({
+        _id: new ObjectId(application.scholarshipId),
+      });
+
+      const totalAmount =
+        parseInt(application.applicationFees) +
+        parseInt(application.serviceCharge);
+
       const session = await stripe.checkout.sessions.create({
         line_items: [
           {
             price_data: {
-              currency: 'usd',
+              currency: "usd",
               product_data: {
                 name: scholarship.scholarshipName,
-                images: [scholarship.universityImage]
+                images: [scholarship.universityImage],
               },
-              unit_amount: (parseInt(paymentInfo.applicationFees) + parseInt(paymentInfo.serviceCharge)) * 100
+              unit_amount: totalAmount * 100,
             },
             quantity: 1,
-        }
+          },
         ],
-        customer_email: paymentInfo.userEmail,
-        mode: 'payment',
+        customer_email: application.userEmail,
+        mode: "payment",
         metadata: {
-          scholarshipId: paymentInfo.scholarshipId,
-          userId: paymentInfo.userId,
-          userEmail: paymentInfo.userEmail,
-          userName: paymentInfo.userName
+          applicationId: applicationId,
         },
         success_url: `${process.env.SITE_DOMAIN}/scholarship/payment-success`,
-        cancel_url: `${process.env.SITE_DOMAIN}/scholarship/payment-cancelled/${paymentInfo.scholarshipId}`,
-      })
-      res.send({ url: session.url })
-    })
+        cancel_url: `${process.env.SITE_DOMAIN}/scholarship/payment-cancelled/${application.scholarshipId}`,
+      });
+      res.send({ url: session.url });
+    });
+
+    app.post("/applications", async (req, res) => {
+      const { userId, scholarshipId } = req.body;
+
+      const existingApplication = await applicationsCollection.findOne({
+        userId,
+        scholarshipId,
+      });
+      
+      const student = await usersCollection.findOne({ _id: new ObjectId(userId) })
+
+      if (student.role !== 'student') {
+        return res.status(400).json({ message: 'You need to be a student to apply' })
+      }
+
+      if (existingApplication) {
+        return res.status(409).json({
+          message: "You have already applied for this Scholarship",
+        });
+      }
+
+      const scholarship = await scholarshipsCollection.findOne({
+        _id: new ObjectId(scholarshipId),
+      });
+
+      if (!scholarship) {
+        return res.status(404).json({ message: "Scholarship not found" });
+      }
+
+      const deadline = parse(
+        scholarship.applicationDeadline,
+        "dd/MM/yyyy",
+        new Date()
+      );
+
+      if (isAfter(new Date(), deadline)) {
+        return res.status(400).json({
+          message: "Application deadline has passed",
+        });
+      }
+
+      const applicationInfo = {
+        ...req.body,
+        applicationStatus: "pending",
+        paymentStatus: "unpaid",
+        applicationDate: new Date(),
+      };
+
+      const result = await applicationsCollection.insertOne(applicationInfo);
+
+      res.send({ applicationId: result.insertedId });
+    });
 
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
