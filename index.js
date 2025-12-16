@@ -235,6 +235,7 @@ async function run() {
       res.send({ url: session.url });
     });
 
+    // Application related API's
     app.post("/applications", async (req, res) => {
       const { userId, scholarshipId } = req.body;
 
@@ -286,6 +287,22 @@ async function run() {
 
       res.send({ applicationId: result.insertedId });
     });
+
+    app.get('/applications', async (req, res) => {
+      const query = {};
+      const result = await applicationsCollection.find(query).toArray();
+      res.status(200).json(result);
+    })
+
+    app.patch('/applications/feedback/:id', async (req, res) => {
+      const { feedback } = req.body
+      const updateDoc = {
+        $set: {feedback: feedback}
+      };
+      const query = { _id: new ObjectId(req.params.id) };
+      const result = await applicationsCollection.updateOne(query, updateDoc);
+      res.status(200).json(result);
+    })
 
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
