@@ -304,6 +304,17 @@ async function run() {
       res.status(200).json(result);
     })
 
+    app.patch('/applications/status/:id', async (req, res) => {
+      const id = req.params.id;
+      const status = req.body;
+      const updateDoc = {
+        $set: status
+      } 
+      const query = { _id: new ObjectId(id) };
+      const result = await applicationsCollection.updateOne(query, updateDoc);
+      res.status(200).json(result);
+    })
+
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
     console.log(
