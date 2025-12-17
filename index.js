@@ -294,6 +294,13 @@ async function run() {
       res.status(200).json(result);
     })
 
+    app.get('/applications/:email', async (req, res) => {
+      const email = req.params.email;
+      const query = { userEmail: email };
+      const result = await applicationsCollection.find(query).toArray();
+      res.status(200).json(result);
+    })
+
     app.patch('/applications/feedback/:id', async (req, res) => {
       const { feedback } = req.body
       const updateDoc = {
@@ -311,6 +318,16 @@ async function run() {
         $set: status
       } 
       const query = { _id: new ObjectId(id) };
+      const result = await applicationsCollection.updateOne(query, updateDoc);
+      res.status(200).json(result);
+    })
+
+    app.patch('/applications/reject/:id', async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+      const updateDoc = {
+        $set: {applicationStatus: 'rejected'}
+      }
       const result = await applicationsCollection.updateOne(query, updateDoc);
       res.status(200).json(result);
     })
