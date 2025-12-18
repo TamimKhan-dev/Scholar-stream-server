@@ -356,6 +356,20 @@ async function run() {
       res.status(200).json(result);
     })
 
+    app.patch('/reviews/:id', async (req, res) => {
+      const id = req.params.id;
+      const { reviewComment, ratingPoint } = req.body;
+      const updateDoc = {
+        $set: {
+          reviewComment,
+          ratingPoint
+        }
+      };
+      const query = { _id: new ObjectId(id) };
+      const result = await reviewsCollection.updateOne(query, updateDoc);
+      res.status(200).json(result);
+    })
+
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
     console.log(
