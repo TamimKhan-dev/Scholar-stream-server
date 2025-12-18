@@ -34,6 +34,7 @@ let db
 let applicationsCollection;
 let scholarshipsCollection;
 let usersCollection;
+let reviewsCollection;
 
 // Stripe webhook
 app.post(
@@ -108,6 +109,7 @@ async function run() {
     usersCollection = db.collection("users");
     scholarshipsCollection = db.collection("scholarships");
     applicationsCollection = db.collection("applications");
+    reviewsCollection = db.collection('reviews');
 
     await applicationsCollection.createIndex(
       { userId: 1, scholarshipId: 1 },
@@ -337,6 +339,14 @@ async function run() {
       const query = { _id: new ObjectId(id) };
       const result = await applicationsCollection.deleteOne(query);
       res.status(200).json(result);
+    })
+
+    // Review related API's 
+    app.post('/reviews', async (req, res) => {
+      const reviewInfo = req.body;
+      reviewInfo.reviewDate = new Date();
+      const result = await reviewsCollection.insertOne(reviewInfo);
+      res.status(201).send(result);
     })
 
     // Send a ping to confirm a successful connection
