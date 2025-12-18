@@ -30,7 +30,7 @@ app.use(
 );
 
 // Mongodb Collections
-let db
+let db;
 let applicationsCollection;
 let scholarshipsCollection;
 let usersCollection;
@@ -109,7 +109,31 @@ async function run() {
     usersCollection = db.collection("users");
     scholarshipsCollection = db.collection("scholarships");
     applicationsCollection = db.collection("applications");
-    reviewsCollection = db.collection('reviews');
+    reviewsCollection = db.collection("reviews");
+
+    const verifyAdmin = async (req, res, next) => {
+      const email = req.tokenEmail;
+      const query = { email };
+      const user = await usersCollection.findOne(query);
+
+      if (!user || user.role !== "admin") {
+        return res.status(403).send({ message: "forbidden access" });
+      }
+
+      next();
+    };
+
+    const verifyModerator = async (req, res, next) => {
+      const email = req.tokenEmail;
+      const query = { email };
+      const user = await usersCollection.findOne(query);
+
+      if (!user || user.role !== "moderator") {
+        return res.status(403).send({ message: "forbidden access" });
+      }
+
+      next();
+    };
 
     await applicationsCollection.createIndex(
       { userId: 1, scholarshipId: 1 },
@@ -130,20 +154,27 @@ async function run() {
       res.status(201).json(result);
     });
 
-    app.get("/users", async (req, res) => {
+    app.get("/users", verifyJWT, verifyAdmin, async (req, res) => {
       const query = {};
       const result = await usersCollection.find(query).toArray();
       res.status(200).json(result);
     });
 
-    app.get("/users/:email", async (req, res) => {
+    app.get("/users/:email", verifyJWT, async (req, res) => {
       const email = req.params.email;
       const query = { email };
       const result = await usersCollection.findOne(query);
       res.status(200).json(result);
     });
 
-    app.patch("/users/:id", async (req, res) => {
+    app.get("/users/:email/role", verifyJWT, async (req, res) => {
+      const email = req.params.email;
+      const query = { email };
+      const result = await usersCollection.findOne(query);
+      res.status(200).json(result);
+    });
+
+    app.patch("/users/:id", verifyJWT, verifyAdmin, async (req, res) => {
       const id = req.params.id;
       const updatedRole = { $set: req.body };
       const query = { _id: new ObjectId(id) };
@@ -151,7 +182,7 @@ async function run() {
       res.status(201).json(result);
     });
 
-    app.delete("/users/:id", async (req, res) => {
+    app.delete("/users/:id", verifyJWT, verifyAdmin, async (req, res) => {
       const id = req.params.id;
       const query = { _id: new ObjectId(id) };
       const result = await usersCollection.deleteOne(query);
@@ -159,7 +190,7 @@ async function run() {
     });
 
     // Scholarship related API's
-    app.post("/scholarships", async (req, res) => {
+    app.post("/scholarships", verifyJWT, verifyAdmin, async (req, res) => {
       const scholarshipInfo = req.body;
       scholarshipInfo.postDate = format(new Date(), "dd/MM/yyyy");
       const result = await scholarshipsCollection.insertOne(scholarshipInfo);
@@ -172,14 +203,14 @@ async function run() {
       res.status(200).json(result);
     });
 
-    app.get("/scholarships/:id", async (req, res) => {
+    app.get("/scholarships/:id", verifyJWT, async (req, res) => {
       const id = req.params.id;
       const query = { _id: new ObjectId(id) };
       const result = await scholarshipsCollection.findOne(query);
       res.status(200).json(result);
     });
 
-    app.patch("/scholarships/:id", async (req, res) => {
+    app.patch("/scholarships/:id", verifyJWT, verifyAdmin, async (req, res) => {
       const id = req.params.id;
       const query = { _id: new ObjectId(id) };
       const scholarshipInfo = {
@@ -238,18 +269,22 @@ async function run() {
     });
 
     // Application related API's
-    app.post("/applications", async (req, res) => {
+    app.post("/applications", verifyJWT,async (req, res) => {
       const { userId, scholarshipId } = req.body;
 
       const existingApplication = await applicationsCollection.findOne({
         userId,
         scholarshipId,
       });
-      
-      const student = await usersCollection.findOne({ _id: new ObjectId(userId) })
 
-      if (student.role !== 'student') {
-        return res.status(400).json({ message: 'You need to be a student to apply' })
+      const student = await usersCollection.findOne({
+        _id: new ObjectId(userId),
+      });
+
+      if (student.role !== "student") {
+        return res
+          .status(400)
+          .json({ message: "You need to be a student to apply" });
       }
 
       if (existingApplication) {
@@ -290,104 +325,113 @@ async function run() {
       res.send({ applicationId: result.insertedId });
     });
 
-    app.get('/applications', async (req, res) => {
+    app.get("/applications", verifyJWT, verifyModerator, async (req, res) => {
       const query = {};
       const result = await applicationsCollection.find(query).toArray();
       res.status(200).json(result);
-    })
+    });
 
-    app.get('/applications/:email', async (req, res) => {
+    app.get("/applications/:email", verifyJWT, async (req, res) => {
       const email = req.params.email;
       const query = { userEmail: email };
       const result = await applicationsCollection.find(query).toArray();
       res.status(200).json(result);
-    })
+    });
 
-    app.patch('/applications/feedback/:id', async (req, res) => {
-      const { feedback } = req.body
+    app.patch("/applications/feedback/:id", verifyJWT, verifyModerator, async (req, res) => {
+      const { feedback } = req.body;
       const updateDoc = {
-        $set: {feedback: feedback}
+        $set: { feedback: feedback },
       };
       const query = { _id: new ObjectId(req.params.id) };
       const result = await applicationsCollection.updateOne(query, updateDoc);
       res.status(200).json(result);
-    })
+    });
 
-    app.patch('/applications/status/:id', async (req, res) => {
+    app.patch("/applications/status/:id", verifyJWT, verifyModerator, async (req, res) => {
       const id = req.params.id;
       const status = req.body;
       const updateDoc = {
-        $set: status
-      } 
+        $set: status,
+      };
       const query = { _id: new ObjectId(id) };
       const result = await applicationsCollection.updateOne(query, updateDoc);
       res.status(200).json(result);
-    })
+    });
 
-    app.patch('/applications/reject/:id', async (req, res) => {
+    app.patch("/applications/reject/:id", verifyJWT, verifyModerator, async (req, res) => {
       const id = req.params.id;
       const query = { _id: new ObjectId(id) };
       const updateDoc = {
-        $set: {applicationStatus: 'rejected'}
-      }
+        $set: { applicationStatus: "rejected" },
+      };
       const result = await applicationsCollection.updateOne(query, updateDoc);
       res.status(200).json(result);
-    })
+    });
 
-    app.delete('/applications/:id', async (req, res) => {
+    app.delete("/applications/:id", verifyJWT, async (req, res) => {
       const id = req.params.id;
       const query = { _id: new ObjectId(id) };
       const result = await applicationsCollection.deleteOne(query);
       res.status(200).json(result);
-    })
+    });
 
-    // Review related API's 
-    app.post('/reviews', async (req, res) => {
+    // Review related API's
+    app.post("/reviews", verifyJWT, async (req, res) => {
       const reviewInfo = req.body;
       reviewInfo.reviewDate = new Date();
       const result = await reviewsCollection.insertOne(reviewInfo);
       res.status(201).send(result);
-    })
+    });
 
-    app.get('/reviews', async (req, res) => {
+    app.get("/reviews", verifyJWT, verifyModerator, async (req, res) => {
       const query = {};
       const result = await reviewsCollection.find(query).toArray();
       res.status(200).json(result);
-    })
+    });
 
-    app.get('/reviews/:email', async (req, res) => {
+    app.get("/reviews/:email", verifyJWT, async (req, res) => {
       const email = req.params.email;
       const query = { userEmail: email };
       const result = await reviewsCollection.find(query).toArray();
       res.status(200).json(result);
-    })
+    });
 
-    app.patch('/reviews/:id', async (req, res) => {
+    app.get("/review/matched/xyz", verifyJWT, async (req, res) => {
+      const { scholarshipId } = req.query;
+      if (!scholarshipId)
+        return res.status(400).json({ message: "scholarshipId is required" });
+
+      const result = await reviewsCollection.find({ scholarshipId }).toArray();
+      res.status(200).json(result);
+    });
+
+    app.patch("/reviews/:id", verifyJWT, async (req, res) => {
       const id = req.params.id;
       const { reviewComment, ratingPoint } = req.body;
       const updateDoc = {
         $set: {
           reviewComment,
-          ratingPoint
-        }
+          ratingPoint,
+        },
       };
       const query = { _id: new ObjectId(id) };
       const result = await reviewsCollection.updateOne(query, updateDoc);
       res.status(200).json(result);
-    })
+    });
 
-    app.delete('/reviews/:id', async (req, res) => {
+    app.delete("/reviews/:id", verifyJWT, async (req, res) => {
       const id = req.params.id;
       const query = { _id: new ObjectId(id) };
       const result = await reviewsCollection.deleteOne(query);
       res.status(200).json(result);
-    })
+    });
 
     // Send a ping to confirm a successful connection
-    await client.db("admin").command({ ping: 1 });
-    console.log(
-      "Pinged your deployment. You successfully connected to MongoDB!"
-    );
+    // await client.db("admin").command({ ping: 1 });
+    // console.log(
+    //   "Pinged your deployment. You successfully connected to MongoDB!"
+    // );
   } finally {
     // Ensures that the client will close when you finish/error
   }
