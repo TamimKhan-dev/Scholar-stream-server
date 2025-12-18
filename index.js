@@ -349,6 +349,12 @@ async function run() {
       res.status(201).send(result);
     })
 
+    app.get('/reviews', async (req, res) => {
+      const query = {};
+      const result = await reviewsCollection.find(query).toArray();
+      res.status(200).json(result);
+    })
+
     app.get('/reviews/:email', async (req, res) => {
       const email = req.params.email;
       const query = { userEmail: email };
