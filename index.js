@@ -349,6 +349,13 @@ async function run() {
       res.status(201).send(result);
     })
 
+    app.get('/reviews/:email', async (req, res) => {
+      const email = req.params.email;
+      const query = { userEmail: email };
+      const result = await reviewsCollection.find(query).toArray();
+      res.status(200).json(result);
+    })
+
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
     console.log(
