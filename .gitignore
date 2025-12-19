@@ -1,3 +1,4 @@
 node_modules
 assignment11-starter-firebase-adminsdk.json
 .env
+.vercel
