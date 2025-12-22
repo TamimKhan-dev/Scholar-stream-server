@@ -294,7 +294,7 @@ async function run() {
         metadata: {
           applicationId: applicationId,
         },
-        success_url: `${process.env.SITE_DOMAIN}/scholarship/payment-success`,
+        success_url: `${process.env.SITE_DOMAIN}/scholarship/payment-success/${application.scholarshipId}`,
         cancel_url: `${process.env.SITE_DOMAIN}/scholarship/payment-cancelled/${application.scholarshipId}`,
       });
       res.send({ url: session.url });
