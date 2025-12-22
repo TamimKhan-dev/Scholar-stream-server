@@ -192,15 +192,47 @@ async function run() {
     // Scholarship related API's
     app.post("/scholarships", verifyJWT, verifyAdmin, async (req, res) => {
       const scholarshipInfo = req.body;
-      scholarshipInfo.postDate = format(new Date(), "dd/MM/yyyy");
+      scholarshipInfo.postDate = new Date();
       const result = await scholarshipsCollection.insertOne(scholarshipInfo);
       res.status(201).json(result);
     });
 
     app.get("/scholarships", async (req, res) => {
-      const query = {};
-      const result = await scholarshipsCollection.find(query).toArray();
-      res.status(200).json(result);
+      const {
+        search = "",
+        scholarshipCategory = "",
+        sortValue = "Latest",
+        limit = 0,
+        skip = 0,
+      } = req.query;
+      let query = {};
+
+      if (search) {
+        query.$or = [
+          { scholarshipName: { $regex: search, $options: "i" } },
+          { universityName: { $regex: search, $options: "i" } },
+          { degree: { $regex: search, $options: "i" } },
+        ];
+      }
+
+      if (scholarshipCategory) query.scholarshipCategory = scholarshipCategory;
+
+      const sortQuery =
+        sortValue === "Oldest" ? { postDate: 1 } : { postDate: -1 };
+
+      const result = await scholarshipsCollection
+        .find(query)
+        .limit(Number(limit))
+        .skip(Number(skip))
+        .sort(sortQuery)
+        .toArray();
+
+      const total = await scholarshipsCollection.countDocuments(query); 
+
+      res.status(200).json({
+        data: result,
+        total
+      });
     });
 
     app.get("/scholarships/:id", verifyJWT, async (req, res) => {
@@ -216,7 +248,7 @@ async function run() {
       const scholarshipInfo = {
         $set: {
           ...req.body,
-          postDate: format(new Date(), "dd/MM/yyyy"),
+          postDate: new Date(),
         },
       };
 
@@ -269,7 +301,7 @@ async function run() {
     });
 
     // Application related API's
-    app.post("/applications", verifyJWT,async (req, res) => {
+    app.post("/applications", verifyJWT, async (req, res) => {
       const { userId, scholarshipId } = req.body;
 
       const existingApplication = await applicationsCollection.findOne({
@@ -325,7 +357,7 @@ async function run() {
       res.send({ applicationId: result.insertedId });
     });
 
-    app.get("/applications", verifyJWT, verifyModerator, async (req, res) => {
+    app.get("/applications", verifyJWT, async (req, res) => {
       const query = {};
       const result = await applicationsCollection.find(query).toArray();
       res.status(200).json(result);
@@ -338,36 +370,51 @@ async function run() {
       res.status(200).json(result);
     });
 
-    app.patch("/applications/feedback/:id", verifyJWT, verifyModerator, async (req, res) => {
-      const { feedback } = req.body;
-      const updateDoc = {
-        $set: { feedback: feedback },
-      };
-      const query = { _id: new ObjectId(req.params.id) };
-      const result = await applicationsCollection.updateOne(query, updateDoc);
-      res.status(200).json(result);
-    });
+    app.patch(
+      "/applications/feedback/:id",
+      verifyJWT,
+      verifyModerator,
+      async (req, res) => {
+        const { feedback } = req.body;
+        const updateDoc = {
+          $set: { feedback: feedback },
+        };
+        const query = { _id: new ObjectId(req.params.id) };
+        const result = await applicationsCollection.updateOne(query, updateDoc);
+        res.status(200).json(result);
+      }
+    );
 
-    app.patch("/applications/status/:id", verifyJWT, verifyModerator, async (req, res) => {
-      const id = req.params.id;
-      const status = req.body;
-      const updateDoc = {
-        $set: status,
-      };
-      const query = { _id: new ObjectId(id) };
-      const result = await applicationsCollection.updateOne(query, updateDoc);
-      res.status(200).json(result);
-    });
+    app.patch(
+      "/applications/status/:id",
+      verifyJWT,
+      verifyModerator,
+      async (req, res) => {
+        const id = req.params.id;
+        const status = req.body;
+        const updateDoc = {
+          $set: status,
+        };
+        const query = { _id: new ObjectId(id) };
+        const result = await applicationsCollection.updateOne(query, updateDoc);
+        res.status(200).json(result);
+      }
+    );
 
-    app.patch("/applications/reject/:id", verifyJWT, verifyModerator, async (req, res) => {
-      const id = req.params.id;
-      const query = { _id: new ObjectId(id) };
-      const updateDoc = {
-        $set: { applicationStatus: "rejected" },
-      };
-      const result = await applicationsCollection.updateOne(query, updateDoc);
-      res.status(200).json(result);
-    });
+    app.patch(
+      "/applications/reject/:id",
+      verifyJWT,
+      verifyModerator,
+      async (req, res) => {
+        const id = req.params.id;
+        const query = { _id: new ObjectId(id) };
+        const updateDoc = {
+          $set: { applicationStatus: "rejected" },
+        };
+        const result = await applicationsCollection.updateOne(query, updateDoc);
+        res.status(200).json(result);
+      }
+    );
 
     app.delete("/applications/:id", verifyJWT, async (req, res) => {
       const id = req.params.id;
